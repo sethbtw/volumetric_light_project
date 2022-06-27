@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rick and Morty</title>
+</head>
+<body>
+    
+    <style>
+        * {margin:0;padding:0;}
+
+        body {overflow: hidden;}
+
+        .container {width: 100%; height: 100vh;}
+    </style>
+
+    <div class="container"></div>
+
+    
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.139.0/build/three.module.js",
+                "postprocessing": "https://unpkg.com/postprocessing@6.28.1/build/postprocessing.esm.js",
+                "OrbitControls": "https://unpkg.com/three@0.139.0/examples/jsm/controls/OrbitControls.js",
+                "GLTFLoader": "https://unpkg.com/three@0.139.0/examples/jsm/loaders/GLTFLoader.js",
+                "RectAreaLightHelper": "https://unpkg.com/three@0.139.0/examples/jsm/helpers/RectAreaLightHelper.js",
+                "RectAreaLightUniformsLib": "https://unpkg.com/three@0.139.0/examples/jsm/lights/RectAreaLightUniformsLib.js"
+            }
+        }
+    </script>
+
+    <script type="module">
+
+        import * as THREE from 'three';
+        import * as POSTPROCESSING from 'postprocessing';       
+        import { OrbitControls } from 'OrbitControls';
+        import { GLTFLoader } from 'GLTFLoader';
+        import { RectAreaLightHelper } from 'RectAreaLightHelper';
+        import { RectAreaLightUniformsLib } from 'RectAreaLightUniformsLib';
+
+        function init() {
+            let container = document.querySelector('.container');
+
+            //Сцена
+            const scene = new THREE.Scene()
+            scene.background = new THREE.Color(0x020202);
+
+            //Камера
+            const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 50000);
+            camera.position.y = 50
+            camera.position.z = 350
+
+            //Рендер
+            const renderer = new THREE.WebGLRenderer({antialias: true})
+            renderer.setSize(window.innerWidth, window.innerHeight)
+            container.appendChild(renderer.domElement)
+
+            //Круг
+            let circleGeo = new THREE.CircleGeometry(260, 50)
+            let circleMat = new THREE.MeshBasicMaterial({color: 0x66ff0c})
+            let circle = new THREE.Mesh(circleGeo, circleMat)
+            circle.position.set(0, -70, -500)
+            //circle.scale.setY(1.05) //- по желанию придать форму
+            scene.add(circle)
+
+            //Движение вправо-влево
+            var step2 = 0;
+            function left_right(obj, speed) {
+                step2 += speed;
+                obj.position.x = 10 + ( 100 * (Math.cos(step2)));
+            }
+
+            //Сглаживание
+            let areaImage = new Image();
+                areaImage.src = POSTPROCESSING.SMAAEffect.areaImageDataURL;
+            let searchImage = new Image();
+                searchImage.src = POSTPROCESSING.SMAAEffect.searchImageDataURL;
+            let smaaEffect = new POSTPROCESSING.SMAAEffect(searchImage,areaImage, 1);
+
+            //GodRaysEffect
+            let godraysEffect = new POSTPROCESSING.GodRaysEffect(camera, circle, {
+                resolutionScale: 1,
+                density: 0.88,
+                decay: 0.95,
+                weight: 0.7,
+                samples: 100
+            });
+
+            let renderPass = new POSTPROCESSING.RenderPass(scene, camera)
+            let effectPass = new POSTPROCESSING.EffectPass(camera,smaaEffect,godraysEffect);
+            effectPass.renderToScreen = true
+
+            const composer = new POSTPROCESSING.EffectComposer(renderer)
+            composer.addPass(renderPass)
+            composer.addPass(effectPass)
+
+            //Импорт модели
+            {
+                const loader = new GLTFLoader();
+                loader.load('rickandmorty.glb', gltf => {
+                scene.add(gltf.scene);
+                }, 
+                    function (error) {
+                        console.log('Error: ' + error)
+                    }
+                )
+            }
+
+            //Музыка
+            const listener = new THREE.AudioListener();
+            camera.add( listener );
+
+            const backgroundSound = new THREE.Audio( listener );
+
+            const audioLoader = new THREE.AudioLoader();
+            audioLoader.load( 'rickandmorty.mp3', function( buffer ) {
+	            backgroundSound.setBuffer( buffer );
+	            backgroundSound.setLoop( true );
+	            backgroundSound.setVolume( 0.1 );
+	            //backgroundSound.play();
+            });
+
+                    
+            //Свет
+            {
+                const directionalLight = new THREE.DirectionalLight(0x00ff00, 1)
+                directionalLight.position.set(0, 0, -1)
+                scene.add(directionalLight)
+            }
+                       
+            //OrbitControls
+            const controls = new OrbitControls(camera, renderer.domElement);
+
+            //Resize
+            window.addEventListener('resize', onWindowResize, false)
+            
+            function onWindowResize() {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+
+                renderer.setSize(window.innerWidth, window.innerHeight)
+            }
+
+            //Animate
+            function animate() {
+                requestAnimationFrame(animate);
+                left_right(circle, 0.01);
+                controls.update();
+                composer.render(0.1)
+            }
+            animate()
+        }
+
+        init()
+    </script>
+</body>
+</html>
